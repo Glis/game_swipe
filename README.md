@@ -1,4 +1,4 @@
-# GAmeswipe: A Ver Qué Jugamos 🎲
+# Gameswipe: A Ver Qué Jugamos 🎲
 
 App web para decidir qué juego de mesa jugar: cada jugador swipea el catálogo (like/nope) y al final se arma un podio con los juegos más votados.
 
