@@ -104,7 +104,7 @@
     return rows;
   }
 
-  function importCSV(text){
+  function importCSV(text, opts = {}){
     if(text.charCodeAt(0) === 0xFEFF) text = text.slice(1); // quita BOM
     const rows = parseCSV(text).filter(r => r.some(c => c.trim() !== ''));
     if(rows.length < 2){ alert('El CSV no tiene filas de juegos.'); return; }
@@ -131,11 +131,13 @@
     }
     if(!parsed.length){ alert('No se encontraron juegos válidos en el CSV.'); return; }
 
-    const replace = confirm(
-      `Se leyeron ${parsed.length} juego(s).\n\n` +
-      `Aceptar = REEMPLAZAR tu colección actual.\n` +
-      `Cancelar = AGREGAR a la colección existente (se fusionan los repetidos por nombre).`
-    );
+    const replace = opts.mode === 'add' ? false
+      : opts.mode === 'replace' ? true
+      : confirm(
+          `Se leyeron ${parsed.length} juego(s).\n\n` +
+          `Aceptar = REEMPLAZAR tu colección actual.\n` +
+          `Cancelar = AGREGAR a la colección existente (se fusionan los repetidos por nombre).`
+        );
     if(replace) catalog = [];
 
     // upsertGame también fusiona filas repetidas dentro del propio CSV
@@ -193,7 +195,7 @@
     }
 
     return `
-      <div class="section-head"><h2>Tu colección</h2><span>${catalog.length} juego${catalog.length===1?'':'s'}</span></div>
+      <div class="section-head"><h2>Tu colección <a href="#" class="base-link" id="baseLink" title="Agregar la colección base">(base)</a></h2><span>${catalog.length} juego${catalog.length===1?'':'s'}</span></div>
       <div class="catalog-toolbar">
         <button class="btn btn-ghost btn-sm" id="exportBtn" ${catalog.length===0?'disabled':''}>⬇ Exportar CSV</button>
         <button class="btn btn-ghost btn-sm" id="importBtn">⬆ Importar CSV</button>
@@ -226,6 +228,9 @@
         saveCatalog(); render();
       });
     });
+
+    const baseLink = document.getElementById('baseLink');
+    if(baseLink) baseLink.addEventListener('click', (e)=>{ e.preventDefault(); addBaseCollection(); });
 
     const exportBtn = document.getElementById('exportBtn');
     if(exportBtn) exportBtn.addEventListener('click', exportCSV);
@@ -279,6 +284,18 @@
       saveCatalog();
       render();
     });
+  }
+
+  function addBaseCollection(){
+    if(!confirm('¿Agregar la colección base de juegos a tu catálogo?\nLos que ya tengas se fusionan (no se duplican).')) return;
+    fetch('base.csv')
+      .then(res => { if(!res.ok) throw new Error(res.status); return res.text(); })
+      .then(text => importCSV(text, {mode:'add'}))
+      .catch(() => alert(
+        'No se pudo cargar la colección base (base.csv).\n\n' +
+        'Si abriste el archivo directamente (file://), el navegador bloquea la lectura. ' +
+        'Probá con un servidor local o en la versión publicada.'
+      ));
   }
 
   // ---------------- SESSION FLOW ----------------
