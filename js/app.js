@@ -41,6 +41,11 @@
 
   function normName(n){ return (n||'').trim().toLowerCase(); }
 
+  // "2 jugadores" cuando min y max coinciden; "2-4 jugadores" si no.
+  function playersLabel(g){
+    return g.minP === g.maxP ? `${g.minP} jugadores` : `${g.minP}-${g.maxP} jugadores`;
+  }
+
   // Agrega el juego, o si ya existe uno con el mismo nombre, fusiona sus datos
   // (los campos con valor nuevo pisan al anterior). Devuelve 'added' o 'merged'.
   function upsertGame(data){
@@ -179,7 +184,7 @@
               <p class="desc">${esc(g.description||'')}</p>
               <div class="badges">
                 ${g.duration ? `<span class="badge mono">⏱ ${g.duration} min</span>` : ''}
-                <span class="badge mono">👥 ${g.minP}-${g.maxP}</span>
+                <span class="badge mono">👥 ${playersLabel(g)}</span>
               </div>
             </div>
             <button class="del-btn" data-id="${g.id}" title="Eliminar">✕</button>
@@ -382,7 +387,7 @@
             <p class="desc">${esc(g.description||'')}</p>
             <div class="badges">
               ${g.duration ? `<span class="badge mono">⏱ ${g.duration} min</span>` : ''}
-              <span class="badge mono">👥 ${g.minP}-${g.maxP}</span>
+              <span class="badge mono">👥 ${playersLabel(g)}</span>
             </div>
           </div>
         </div>`;
