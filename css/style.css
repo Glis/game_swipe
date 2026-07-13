@@ -126,6 +126,8 @@ form.addform h3{ color:var(--foil); font-family:'Fraunces'; font-style:italic; f
   border-radius:8px; padding:9px 10px; font-family:'Inter'; font-size:0.9rem; color:var(--ink); resize:vertical;
 }
 .field input:focus, .field textarea:focus{ outline:2px solid var(--foil); }
+.dupe-hint{ display:block; margin-top:5px; font-size:0.72rem; color:var(--foil); font-weight:600; }
+.dupe-hint[hidden]{ display:none; }
 .btn{
   border:none; border-radius:999px; padding:11px 22px; font-family:'Inter'; font-weight:700;
   font-size:0.9rem; cursor:pointer; transition:transform .12s ease, filter .12s ease;

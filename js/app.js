@@ -39,6 +39,24 @@
   function uid(){ return 'g' + Date.now() + Math.floor(Math.random()*1000); }
   function esc(s){ const d=document.createElement('div'); d.innerText=s; return d.innerHTML; }
 
+  function normName(n){ return (n||'').trim().toLowerCase(); }
+
+  // Agrega el juego, o si ya existe uno con el mismo nombre, fusiona sus datos
+  // (los campos con valor nuevo pisan al anterior). Devuelve 'added' o 'merged'.
+  function upsertGame(data){
+    const existing = catalog.find(g => normName(g.name) === normName(data.name));
+    if(existing){
+      if(data.description) existing.description = data.description;
+      if(data.duration != null) existing.duration = data.duration;
+      if(data.minP != null) existing.minP = data.minP;
+      if(data.maxP != null) existing.maxP = data.maxP;
+      return 'merged';
+    }
+    catalog.push({ id: data.id || uid(), name: data.name, description: data.description||'',
+      duration: data.duration ?? null, minP: data.minP ?? 1, maxP: data.maxP ?? 1 });
+    return 'added';
+  }
+
   // ---------------- CSV EXPORT / IMPORT ----------------
   const CSV_HEADERS = ['name','description','duration','minP','maxP'];
 
@@ -92,14 +110,13 @@
           iDur = col('duration'), iMin = col('minP'), iMax = col('maxP');
     if(iName === -1){ alert('El CSV debe tener una columna "name".'); return; }
 
-    const imported = [];
+    const parsed = [];
     for(let i=1; i<rows.length; i++){
       const r = rows[i];
       const name = (r[iName]||'').trim();
       if(!name) continue;
       const durRaw = iDur>=0 ? (r[iDur]||'').trim() : '';
-      imported.push({
-        id: uid() + '-' + i,
+      parsed.push({
         name,
         description: iDesc>=0 ? (r[iDesc]||'').trim() : '',
         duration: durRaw ? parseInt(durRaw) : null,
@@ -107,16 +124,30 @@
         maxP: (iMax>=0 && parseInt(r[iMax])) || 1,
       });
     }
-    if(!imported.length){ alert('No se encontraron juegos válidos en el CSV.'); return; }
+    if(!parsed.length){ alert('No se encontraron juegos válidos en el CSV.'); return; }
 
     const replace = confirm(
-      `Se leyeron ${imported.length} juego(s).\n\n` +
+      `Se leyeron ${parsed.length} juego(s).\n\n` +
       `Aceptar = REEMPLAZAR tu colección actual.\n` +
-      `Cancelar = AGREGAR a la colección existente.`
+      `Cancelar = AGREGAR a la colección existente (se fusionan los repetidos por nombre).`
     );
-    catalog = replace ? imported : catalog.concat(imported);
+    if(replace) catalog = [];
+
+    // upsertGame también fusiona filas repetidas dentro del propio CSV
+    const addedNames = [], mergedNames = [];
+    parsed.forEach(g => {
+      if(upsertGame(g) === 'merged') mergedNames.push(g.name);
+      else addedNames.push(g.name);
+    });
+
     saveCatalog();
     render();
+
+    let msg = `Importación lista: ${addedNames.length} agregado(s), ${mergedNames.length} fusionado(s).`;
+    if(mergedNames.length){
+      msg += `\n\nEstos juegos ya existían (se actualizaron sus datos):\n• ` + mergedNames.join('\n• ');
+    }
+    alert(msg);
   }
 
   // ---------------- RENDER DISPATCH ----------------
@@ -167,7 +198,7 @@
       <form class="addform" id="addGameForm">
         <h3>+ Agregar juego</h3>
         <div class="field-row">
-          <div class="field"><label>Nombre</label><input name="name" id="nameInput" required placeholder="Ej: Wingspan"></div>
+          <div class="field"><label>Nombre</label><input name="name" id="nameInput" required placeholder="Ej: Wingspan"><small class="dupe-hint" id="dupeHint" hidden></small></div>
         </div>
         <div class="field-row">
           <div class="field"><label>Descripción</label><textarea name="description" rows="2" placeholder="De qué se trata, en una línea"></textarea></div>
@@ -210,20 +241,36 @@
     const form = document.getElementById('addGameForm');
     if(!form) return;
 
+    const nameInput = document.getElementById('nameInput');
+    const dupeHint = document.getElementById('dupeHint');
+    if(nameInput && dupeHint){
+      nameInput.addEventListener('input', ()=>{
+        const match = nameInput.value.trim() &&
+          catalog.find(g => normName(g.name) === normName(nameInput.value));
+        if(match){
+          dupeHint.textContent = `Ya existe "${match.name}" — al agregar se actualizarán sus datos.`;
+          dupeHint.hidden = false;
+        } else {
+          dupeHint.textContent = '';
+          dupeHint.hidden = true;
+        }
+      });
+    }
+
     form.addEventListener('submit', (e)=>{
       e.preventDefault();
       const fd = new FormData(form);
       const name = fd.get('name').trim();
       if(!name) return;
       const durationRaw = fd.get('duration').trim();
-      catalog.push({
-        id: uid(),
+      const result = upsertGame({
         name,
         description: fd.get('description').trim(),
         duration: durationRaw ? parseInt(durationRaw) : null,
         minP: parseInt(fd.get('minP'))||1,
         maxP: parseInt(fd.get('maxP'))||1,
       });
+      if(result === 'merged') alert(`Ya tenías "${name}" en la colección — se actualizaron sus datos.`);
       saveCatalog();
       render();
     });
