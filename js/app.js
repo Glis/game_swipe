@@ -39,6 +39,86 @@
   function uid(){ return 'g' + Date.now() + Math.floor(Math.random()*1000); }
   function esc(s){ const d=document.createElement('div'); d.innerText=s; return d.innerHTML; }
 
+  // ---------------- CSV EXPORT / IMPORT ----------------
+  const CSV_HEADERS = ['name','description','duration','minP','maxP'];
+
+  function csvCell(v){
+    const s = (v===null || v===undefined) ? '' : String(v);
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+  }
+
+  function exportCSV(){
+    const rows = [CSV_HEADERS].concat(
+      catalog.map(g => [g.name, g.description||'', g.duration, g.minP, g.maxP])
+    );
+    const csv = rows.map(r => r.map(csvCell).join(',')).join('\r\n');
+    // BOM para que Excel respete los acentos (UTF-8)
+    const blob = new Blob(['﻿' + csv], {type:'text/csv;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'gameswipe-catalogo.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // Parser CSV que respeta comillas, comas y saltos de línea dentro de un campo.
+  function parseCSV(text){
+    const rows = [];
+    let row = [], field = '', inQuotes = false;
+    for(let i=0; i<text.length; i++){
+      const c = text[i];
+      if(inQuotes){
+        if(c === '"'){
+          if(text[i+1] === '"'){ field += '"'; i++; }
+          else inQuotes = false;
+        } else field += c;
+      } else if(c === '"'){ inQuotes = true; }
+      else if(c === ','){ row.push(field); field = ''; }
+      else if(c === '\n'){ row.push(field); rows.push(row); row = []; field = ''; }
+      else if(c !== '\r'){ field += c; }
+    }
+    if(field !== '' || row.length){ row.push(field); rows.push(row); }
+    return rows;
+  }
+
+  function importCSV(text){
+    if(text.charCodeAt(0) === 0xFEFF) text = text.slice(1); // quita BOM
+    const rows = parseCSV(text).filter(r => r.some(c => c.trim() !== ''));
+    if(rows.length < 2){ alert('El CSV no tiene filas de juegos.'); return; }
+
+    const header = rows[0].map(h => h.trim().toLowerCase());
+    const col = name => header.indexOf(name.toLowerCase());
+    const iName = col('name'), iDesc = col('description'),
+          iDur = col('duration'), iMin = col('minP'), iMax = col('maxP');
+    if(iName === -1){ alert('El CSV debe tener una columna "name".'); return; }
+
+    const imported = [];
+    for(let i=1; i<rows.length; i++){
+      const r = rows[i];
+      const name = (r[iName]||'').trim();
+      if(!name) continue;
+      const durRaw = iDur>=0 ? (r[iDur]||'').trim() : '';
+      imported.push({
+        id: uid() + '-' + i,
+        name,
+        description: iDesc>=0 ? (r[iDesc]||'').trim() : '',
+        duration: durRaw ? parseInt(durRaw) : null,
+        minP: (iMin>=0 && parseInt(r[iMin])) || 1,
+        maxP: (iMax>=0 && parseInt(r[iMax])) || 1,
+      });
+    }
+    if(!imported.length){ alert('No se encontraron juegos válidos en el CSV.'); return; }
+
+    const replace = confirm(
+      `Se leyeron ${imported.length} juego(s).\n\n` +
+      `Aceptar = REEMPLAZAR tu colección actual.\n` +
+      `Cancelar = AGREGAR a la colección existente.`
+    );
+    catalog = replace ? imported : catalog.concat(imported);
+    saveCatalog();
+    render();
+  }
+
   // ---------------- RENDER DISPATCH ----------------
   function render(){
     document.querySelectorAll('.tab-btn').forEach(b=>{
@@ -78,6 +158,11 @@
 
     return `
       <div class="section-head"><h2>Tu colección</h2><span>${catalog.length} juego${catalog.length===1?'':'s'}</span></div>
+      <div class="catalog-toolbar">
+        <button class="btn btn-ghost btn-sm" id="exportBtn" ${catalog.length===0?'disabled':''}>⬇ Exportar CSV</button>
+        <button class="btn btn-ghost btn-sm" id="importBtn">⬆ Importar CSV</button>
+        <input type="file" id="importInput" accept=".csv,text/csv" hidden>
+      </div>
       ${list}
       <form class="addform" id="addGameForm">
         <h3>+ Agregar juego</h3>
@@ -105,6 +190,23 @@
         saveCatalog(); render();
       });
     });
+
+    const exportBtn = document.getElementById('exportBtn');
+    if(exportBtn) exportBtn.addEventListener('click', exportCSV);
+
+    const importBtn = document.getElementById('importBtn');
+    const importInput = document.getElementById('importInput');
+    if(importBtn && importInput){
+      importBtn.addEventListener('click', ()=> importInput.click());
+      importInput.addEventListener('change', ()=>{
+        const file = importInput.files[0];
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = ()=>{ importCSV(reader.result); importInput.value=''; };
+        reader.readAsText(file);
+      });
+    }
+
     const form = document.getElementById('addGameForm');
     if(!form) return;
 
