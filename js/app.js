@@ -37,7 +37,10 @@
     }catch(e){ storageOk = false; }
   }
 
-  function uid(){ return 'g' + Date.now() + Math.floor(Math.random()*1000); }
+  let uidCounter = 0;
+  // Contador incremental además del timestamp: evita IDs repetidos al importar
+  // muchos juegos dentro del mismo milisegundo.
+  function uid(){ return 'g' + Date.now() + '-' + (uidCounter++); }
   function esc(s){ const d=document.createElement('div'); d.innerText=s; return d.innerHTML; }
 
   function normName(n){ return (n||'').trim().toLowerCase(); }
