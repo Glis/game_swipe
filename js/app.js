@@ -2,6 +2,7 @@
   const STORAGE_KEY = 'gameswipe.catalog';
   let catalog = [];
   let storageOk = true;
+  let cleanupVoting = null; // remueve los listeners de swipe de la carta anterior
 
   let state = {
     tab: 'catalog',
@@ -159,6 +160,7 @@
 
   // ---------------- RENDER DISPATCH ----------------
   function render(){
+    if(cleanupVoting){ cleanupVoting(); cleanupVoting = null; }
     document.querySelectorAll('.tab-btn').forEach(b=>{
       b.classList.toggle('active', b.dataset.tab === state.tab);
     });
@@ -300,6 +302,7 @@
 
   // ---------------- SESSION FLOW ----------------
   function renderSession(){
+    if(cleanupVoting){ cleanupVoting(); cleanupVoting = null; }
     const view = document.getElementById('view');
     if(!state.session){
       view.innerHTML = sessionSetupHTML();
@@ -346,6 +349,9 @@
     input.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); addPlayer(); } });
 
     document.getElementById('startSessionBtn').addEventListener('click', ()=>{
+      // Incluye un nombre tipeado que no se llegó a "Agregar" con el botón.
+      const pending = input.value.trim();
+      if(pending){ state._tempPlayers.push(pending); input.value=''; }
       const players = state._tempPlayers;
       if(players.length===0 || catalog.length===0) return;
       state.session = {
@@ -428,7 +434,10 @@
     const topCard = document.querySelector('.swipe-card[data-top="true"]');
     if(!topCard) return;
 
+    let resolved = false; // evita contar la misma carta dos veces (swipes rápidos / handlers duplicados)
     function resolveVote(direction){
+      if(resolved) return;
+      resolved = true;
       const gameId = topCard.dataset.id;
       if(direction === 'like') s.votes[gameId] = (s.votes[gameId]||0) + 1;
       s.history.push({gameId, direction});
@@ -503,15 +512,23 @@
       }
       curX = 0;
     }
-    topCard.addEventListener('pointerdown', onDown);
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-
     function keyHandler(e){
       if(e.key === 'ArrowRight') animateOut('like', ()=>resolveVote('like'));
       if(e.key === 'ArrowLeft') animateOut('nope', ()=>resolveVote('nope'));
     }
-    document.addEventListener('keydown', keyHandler, {once:true});
+
+    topCard.addEventListener('pointerdown', onDown);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    document.addEventListener('keydown', keyHandler);
+
+    // Se llama en el próximo render (ver renderSession/render): quita estos listeners
+    // para que no se acumulen carta a carta ni disparen votos fantasma.
+    cleanupVoting = ()=>{
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      document.removeEventListener('keydown', keyHandler);
+    };
   }
 
   // Standard competition ranking (1-1-3): ties share a rank, next distinct value skips ahead.
